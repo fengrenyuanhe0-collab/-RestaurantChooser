@@ -61,3 +61,34 @@ export const validateWebsite = (website) => {
   }
   return null;
 };
+// 验证菜系（必填）
+export const validateCuisine = (cuisine) => {
+  if (!cuisine || cuisine.trim() === "") {
+    return "Cuisine is required";
+  }
+  return null;
+};
+
+// 验证价格（必填）
+export const validatePrice = (price) => {
+  if (price === "" || price === undefined) {
+    return "Price is required";
+  }
+  return null;
+};
+
+// 验证评分（必填）
+export const validateRating = (rating) => {
+  if (rating === "" || rating === undefined) {
+    return "Rating is required";
+  }
+  return null;
+};
+
+// 验证配送选项（必填）
+export const validateDelivery = (delivery) => {
+  if (!delivery || delivery.trim() === "") {
+    return "Please specify delivery option";
+  }
+  return null;
+};

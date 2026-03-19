@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  Alert,
   StyleSheet,
   Platform,
 } from "react-native";
@@ -11,15 +10,21 @@ import { Picker } from "@react-native-picker/picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import CustomTextInput from "../../components/customTextInput";
 import CustomButton from "../../components/customButton";
+// 导入新增的验证函数
 import {
   validateAddress,
   validateName,
   validatePhone,
   validateWebsite,
+  validateCuisine,
+  validatePrice,
+  validateRating,
+  validateDelivery,
 } from "./validators";
 import Toast from "react-native-toast-message";
 
 const AddScreen = ({ navigation }) => {
+  // 优化状态初始化：key 移到保存时生成（避免初始化时无用生成），errors 初始化为空对象
   const [restaurant, setRestaurant] = useState({
     name: "",
     cuisine: "",
@@ -29,7 +34,6 @@ const AddScreen = ({ navigation }) => {
     address: "",
     website: "",
     delivery: "",
-    key: `r_${new Date().getTime()}`,
     errors: {},
   });
 
@@ -37,53 +41,71 @@ const AddScreen = ({ navigation }) => {
     setRestaurant((prev) => ({
       ...prev,
       [field]: value,
-      errors: { ...prev.errors, [field]: null },
+      errors: { ...prev.errors, [field]: null }, // 输入时清空对应字段错误
     }));
   };
 
+  // 优化验证逻辑：复用validators中的函数，移除硬编码
   const validateAllFields = () => {
-    const { name, phone, address, website, cuisine, price, rating, delivery } =
-      restaurant;
+    const { name, phone, address, website, cuisine, price, rating, delivery } = restaurant;
     const errors = {
       name: validateName(name),
       phone: validatePhone(phone),
       address: validateAddress(address),
       website: validateWebsite(website),
-      cuisine: !cuisine ? "Cuisine is required" : null,
-      price: !price ? "Price is required" : null,
-      rating: !rating ? "Rating is required" : null,
-      delivery: !delivery ? "Please specify delivery option" : null,
+      cuisine: validateCuisine(cuisine),
+      price: validatePrice(price),
+      rating: validateRating(rating),
+      delivery: validateDelivery(delivery),
     };
     setRestaurant((prev) => ({ ...prev, errors }));
-    return !Object.values(errors).some((error) => error !== null);
+    // 简化：判断是否有非null的错误
+    return Object.values(errors).every((err) => err === null);
   };
 
   const saveRestaurant = async () => {
-    if (!validateAllFields()) {
-      const firstErrorField = Object.keys(restaurant.errors).find(
-        (key) => restaurant.errors[key]
-      );
-      if (firstErrorField) {
-        Toast.show({
-          type: "error",
-          position: "bottom",
-          text1: "Validation Error",
-          text2: restaurant.errors[firstErrorField],
-          visibilityTime: 3000,
-        });
-        return;
-      }
+    const isFormValid = validateAllFields();
+    if (!isFormValid) {
+      // 找到第一个错误字段并提示
+      const firstErrorKey = Object.keys(restaurant.errors).find(key => restaurant.errors[key]);
+      Toast.show({
+        type: "error",
+        position: "bottom",
+        text1: "Validation Error",
+        text2: restaurant.errors[firstErrorKey],
+        visibilityTime: 3000,
+      });
+      return;
     }
+
     try {
+      // 保存时生成key（避免初始化时生成无效key）
+      const restaurantToSave = {
+        ...restaurant,
+        key: `r_${new Date().getTime()}`,
+      };
       const existingData = await AsyncStorage.getItem("restaurants");
       const restaurants = existingData ? JSON.parse(existingData) : [];
-      restaurants.push(restaurant);
+      restaurants.push(restaurantToSave);
       await AsyncStorage.setItem("restaurants", JSON.stringify(restaurants));
+      
       Toast.show({
         type: "success",
         position: "bottom",
         text1: "Restaurant saved successfully",
         visibilityTime: 2000,
+      });
+      // 保存后清空表单（可选，提升体验）
+      setRestaurant({
+        name: "",
+        cuisine: "",
+        price: "",
+        rating: "",
+        phone: "",
+        address: "",
+        website: "",
+        delivery: "",
+        errors: {},
       });
       navigation.navigate("RestaurantsList");
     } catch (error) {
@@ -98,7 +120,30 @@ const AddScreen = ({ navigation }) => {
     }
   };
 
- return (
+  // 抽离Picker组件：减少重复代码
+  const RenderPicker = ({ label, value, onValueChange, error, items }) => (
+    <>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.pickerContainer}>
+        <Picker
+          prompt={label}
+          selectedValue={value}
+          onValueChange={onValueChange}
+          style={[styles.picker, error ? styles.pickerError : {}]}
+        >
+          <Picker.Item label="" value="" />
+          {items.map((item, index) => (
+            <Picker.Item key={index} label={item.label} value={item.value} />
+          ))}
+        </Picker>
+      </View>
+      {error && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
+    </>
+  );
+
+  return (
     <ScrollView>
       <View style={styles.addScreenInnerContainer}>
         <View style={styles.addScreenFormContainer}>
@@ -110,78 +155,50 @@ const AddScreen = ({ navigation }) => {
             error={restaurant.errors.name}
           />
 
-          <Text style={styles.fieldLabel}>Cuisine</Text>
-          <View style={[styles.pickerContainer]}>
-            <Picker
-              prompt="Cuisine"
-              selectedValue={restaurant.cuisine}
-              onValueChange={(value) => setField("cuisine", value)}
-              style={[
-                styles.picker,
-                restaurant.errors.cuisine ? { borderColor: "red" } : {},
-              ]}
-            >
-              <Picker.Item label="" value="" />
-              <Picker.Item label="American" value="American" />
-              <Picker.Item label="Chinese" value="Chinese" />
-              <Picker.Item label="Italian" value="Italian" />
-              <Picker.Item label="Mexican" value="Mexican" />
-              <Picker.Item label="Other" value="Other" />
-            </Picker>
-          </View>
-          {restaurant.errors.cuisine && (
-            <Text style={{ color: "red", marginLeft: 10, marginBottom: 10 }}>
-              {restaurant.errors.cuisine}
-            </Text>
-          )}
+          {/* 复用RenderPicker组件 - Cuisine */}
+          <RenderPicker
+            label="Cuisine"
+            value={restaurant.cuisine}
+            onValueChange={(val) => setField("cuisine", val)}
+            error={restaurant.errors.cuisine}
+            items={[
+              { label: "American", value: "American" },
+              { label: "Chinese", value: "Chinese" },
+              { label: "Italian", value: "Italian" },
+              { label: "Mexican", value: "Mexican" },
+              { label: "Other", value: "Other" },
+            ]}
+          />
 
-          <Text style={styles.fieldLabel}>Price</Text>
-          <View style={[styles.pickerContainer]}>
-            <Picker
-              selectedValue={restaurant.price}
-              onValueChange={(value) => setField("price", value)}
-              style={[
-                styles.picker,
-                restaurant.errors.price ? { borderColor: "red" } : {},
-              ]}
-            >
-              <Picker.Item label="" value="" />
-              <Picker.Item label="1" value="1" />
-              <Picker.Item label="2" value="2" />
-              <Picker.Item label="3" value="3" />
-              <Picker.Item label="4" value="4" />
-              <Picker.Item label="5" value="5" />
-            </Picker>
-          </View>
-          {restaurant.errors.price && (
-            <Text style={{ color: "red", marginLeft: 10, marginBottom: 10 }}>
-              {restaurant.errors.price}
-            </Text>
-          )}
+          {/* 复用RenderPicker组件 - Price */}
+          <RenderPicker
+            label="Price"
+            value={restaurant.price}
+            onValueChange={(val) => setField("price", val)}
+            error={restaurant.errors.price}
+            items={[
+              { label: "1", value: "1" },
+              { label: "2", value: "2" },
+              { label: "3", value: "3" },
+              { label: "4", value: "4" },
+              { label: "5", value: "5" },
+            ]}
+          />
 
-          <Text style={styles.fieldLabel}>Rating</Text>
-          <View style={[styles.pickerContainer]}>
-            <Picker
-              selectedValue={restaurant.rating}
-              onValueChange={(value) => setField("rating", value)}
-              style={[
-                styles.picker,
-                restaurant.errors.rating ? { borderColor: "red" } : {},
-              ]}
-            >
-              <Picker.Item label="" value="" />
-              <Picker.Item label="1" value="1" />
-              <Picker.Item label="2" value="2" />
-              <Picker.Item label="3" value="3" />
-              <Picker.Item label="4" value="4" />
-              <Picker.Item label="5" value="5" />
-            </Picker>
-          </View>
-          {restaurant.errors.rating && (
-            <Text style={{ color: "red", marginLeft: 10, marginBottom: 10 }}>
-              {restaurant.errors.rating}
-            </Text>
-          )}
+          {/* 复用RenderPicker组件 - Rating */}
+          <RenderPicker
+            label="Rating"
+            value={restaurant.rating}
+            onValueChange={(val) => setField("rating", val)}
+            error={restaurant.errors.rating}
+            items={[
+              { label: "1", value: "1" },
+              { label: "2", value: "2" },
+              { label: "3", value: "3" },
+              { label: "4", value: "4" },
+              { label: "5", value: "5" },
+            ]}
+          />
 
           <CustomTextInput
             label="Phone"
@@ -191,6 +208,7 @@ const AddScreen = ({ navigation }) => {
             error={restaurant.errors.phone}
             keyboardType="phone-pad"
           />
+
           <CustomTextInput
             label="Address"
             maxLength={50}
@@ -198,6 +216,7 @@ const AddScreen = ({ navigation }) => {
             onChangeText={(text) => setField("address", text)}
             error={restaurant.errors.address}
           />
+
           <CustomTextInput
             label="Website"
             maxLength={50}
@@ -208,26 +227,17 @@ const AddScreen = ({ navigation }) => {
             autoCapitalize="none"
           />
 
-          <Text style={styles.fieldLabel}>Delivery?</Text>
-          <View style={[styles.pickerContainer]}>
-            <Picker
-              selectedValue={restaurant.delivery}
-              onValueChange={(value) => setField("delivery", value)}
-              style={[
-                styles.picker,
-                restaurant.errors.delivery ? { borderColor: "red" } : {},
-              ]}
-            >
-              <Picker.Item label="" value="" />
-              <Picker.Item label="Yes" value="Yes" />
-              <Picker.Item label="No" value="No" />
-            </Picker>
-          </View>
-          {restaurant.errors.delivery && (
-            <Text style={{ color: "red", marginLeft: 10, marginBottom: 10 }}>
-              {restaurant.errors.delivery}
-            </Text>
-          )}
+          {/* 复用RenderPicker组件 - Delivery */}
+          <RenderPicker
+            label="Delivery?"
+            value={restaurant.delivery}
+            onValueChange={(val) => setField("delivery", val)}
+            error={restaurant.errors.delivery}
+            items={[
+              { label: "Yes", value: "Yes" },
+              { label: "No", value: "No" },
+            ]}
+          />
         </View>
 
         <View style={styles.addScreenButtonsContainer}>
@@ -247,7 +257,6 @@ const AddScreen = ({ navigation }) => {
   );
 };
 
-
 const styles = StyleSheet.create({
   addScreenInnerContainer: {
     flex: 1,
@@ -258,10 +267,8 @@ const styles = StyleSheet.create({
   addScreenFormContainer: { width: "96%" },
   fieldLabel: {
     marginLeft: 10,
-    // fontSize: 16,
-    // fontWeight: "bold",
-    // marginTop: 10,
   },
+  // 抽离Picker公共样式
   pickerContainer: {
     ...Platform.select({
       ios: {},
@@ -290,13 +297,22 @@ const styles = StyleSheet.create({
       android: {},
     }),
   },
+  // 抽离错误样式
+  pickerError: {
+    borderColor: "red",
+  },
+  errorText: {
+    color: "red",
+    marginLeft: 10,
+    marginBottom: 10,
+  },
   addScreenButtonsContainer: {
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 20,
   },
-  cancelButton: { backgroundColor: "gray", width: "44%" },
-  saveButton: { backgroundColor: "green", width: "44%" },
+  cancelButton: { backgroundColor: "gray", width: "44%", marginRight: 8 }, // 增加间距
+  saveButton: { backgroundColor: "green", width: "44%", marginLeft: 8 },
 });
 
 export default AddScreen;
