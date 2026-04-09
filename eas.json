@@ -1,20 +1,39 @@
 {
   "cli": {
-    "version": ">= 18.5.0"
+    "version": ">= 18.5.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": {"simulator": true},
-      "android": {"buildType": "apk"}
+      "android": {
+        "buildType": "apk",  // 直接生成安卓可安装的APK文件
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "ios": null  // 完全禁用iOS构建，避免触发苹果账号校验
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": null
     },
-    "production": {}
+    "production": {
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": null
+    }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
+      },
+      "ios": null
+    }
   }
 }
