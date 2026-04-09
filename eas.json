@@ -8,32 +8,29 @@
       "developmentClient": true,
       "distribution": "internal",
       "android": {
-        "buildType": "apk",  // 直接生成安卓可安装的APK文件
+        "buildType": "apk",
         "gradleCommand": ":app:assembleDebug"
       },
-      "ios": null  // 完全禁用iOS构建，避免触发苹果账号校验
+      "ios": {}
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
-      "ios": null
+      "ios": {}
     },
     "production": {
       "android": {
         "buildType": "apk"
       },
-      "ios": null
+      "ios": {}
     }
   },
   "submit": {
     "production": {
-      "android": {
-        "serviceAccountKeyPath": "./google-service-account.json",
-        "track": "internal"
-      },
-      "ios": null
+      "android": {},
+      "ios": {}
     }
   }
 }
