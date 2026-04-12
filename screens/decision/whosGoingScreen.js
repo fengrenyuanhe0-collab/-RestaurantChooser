@@ -20,24 +20,23 @@ const WhosGoingScreen = () => {
   const [selected, setSelected] = useState([]);
   const navigation = useNavigation();
 
-  useEffect(() => {
-    const loadPeople = async () => {
-      try {
-        const storedPeople = await AsyncStorage.getItem("people");
-        const parsedPeople = storedPeople ? JSON.parse(storedPeople) : [];
-        setPeople(parsedPeople);
-        setSelected(parsedPeople.map(() => false));
-      } catch (error) {
-        Alert.alert("Error", "Failed to load people data.");
-      }
-    };
-
-    loadPeople();
-  }, []);
-
-  // Handle hardware back button on Android
+  // 合并所有 useFocusEffect 逻辑到一个钩子中（避免重复 + 确保在组件内）
   useFocusEffect(
     useCallback(() => {
+      // 1. 重新加载人员数据（原末尾的逻辑）
+      const loadPeople = async () => {
+        try {
+          const storedPeople = await AsyncStorage.getItem("people");
+          const parsedPeople = storedPeople ? JSON.parse(storedPeople) : [];
+          setPeople(parsedPeople);
+          setSelected(parsedPeople.map(() => false));
+        } catch (error) {
+          Alert.alert("Error", "Failed to load people data.");
+        }
+      };
+      loadPeople();
+
+      // 2. 处理安卓硬件返回键（原第40行的逻辑）
       const onBackPress = () => {
         Alert.alert("Confirm", "Do you want to go back?", [
           { text: "Cancel", style: "cancel" },
@@ -46,12 +45,16 @@ const WhosGoingScreen = () => {
             onPress: () => navigation.goBack(),
           },
         ]);
-        return true; // prevent default behavior
+        return true; // 阻止默认返回行为
       };
 
       const backHandlerSubscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-      return () => backHandlerSubscription.remove();
-    }, [navigation])
+      
+      // 清理函数：组件卸载/离开页面时执行
+      return () => {
+        backHandlerSubscription.remove(); // 移除返回键监听
+      };
+    }, [navigation]) // 依赖数组：navigation 变化时重新执行
   );
 
   const toggleSelection = (index) => {
@@ -133,20 +136,5 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-
-import { useFocusEffect } from "@react-navigation/native";
-
-// 每次进入页面，重新加载人员数据
-useFocusEffect(
-  useCallback(() => {
-    const loadPeople = async () => {
-      const storedPeople = await AsyncStorage.getItem("people");
-      const parsedPeople = storedPeople ? JSON.parse(storedPeople) : [];
-      setPeople(parsedPeople);
-      setSelected(parsedPeople.map(() => false));
-    };
-    loadPeople();
-  }, [])
-);
 
 export default WhosGoingScreen;
